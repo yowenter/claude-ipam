@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+bases:
+  - ./ipam-deploy.yaml
+  # - ./ipam-etcd.yaml
+
+images:
+  - name: claude-cni
+    newTag: latest
+    newName: claude-cni

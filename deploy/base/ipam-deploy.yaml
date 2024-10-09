@@ -1,0 +1,229 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: claude-cni-sa
+  namespace: kube-system
+
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: claude-cni-rb
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: claude-cni-role
+subjects:
+  - kind: ServiceAccount
+    name: claude-cni-sa
+    namespace: kube-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: claude-cni-role
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes
+    verbs:
+      - get
+      - list
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: claude-ipam-svc
+  namespace: kube-system
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+
+  selector:
+    app: claude-ipam-server
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: claude-np
+  namespace: kube-system
+spec:
+  type: NodePort
+  selector:
+    app: claude-ipam-server
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30888
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: claude-ipam-server
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: claude-ipam-server
+  template:
+    metadata:
+      labels:
+        app: claude-ipam-server
+    spec:
+      serviceAccountName: claude-cni-sa
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: "node-role.kubernetes.io/controlplane"
+                    operator: In
+                    values:
+                      - "true"
+                      - ""
+      containers:
+        - name: claude-ipam-server
+          image: claude-cni:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /claude/ipam-server
+          resources:
+            requests:
+              memory: "2000Mi"
+              cpu: "1000m"
+            limits:
+              memory: "2000Mi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 3
+            failureThreshold: 3
+
+          volumeMounts:
+            - name: claude-server-config-volume
+              mountPath: /data
+
+      volumes:
+        - name: claude-server-config-volume
+          configMap:
+            name: "claude-config"
+            defaultMode: 0744
+            items:
+              - key: "claude-server.yaml"
+                path: "claude-server.yaml"
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: claude-node
+  namespace: kube-system
+  labels:
+    tier: node
+    app: claude-node
+spec:
+  selector:
+    matchLabels:
+      name: claude-node
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        tier: node
+        app: claude-node
+        name: claude-node
+    spec:
+      hostNetwork: true
+      tolerations:
+        - operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: claude-install
+          command: ["/bin/bash"]
+          args:
+            - -c
+            - >
+              SLEEP=true /claude/install_cni.sh
+
+          image: claude-cni:latest
+          env:
+            - name: NODENAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "100Mi"
+            limits:
+              cpu: "100m"
+              memory: "200Mi"
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: cnibin
+              mountPath: /host/opt/cni/bin
+            - name: cni-net-dir
+              mountPath: /host/etc/cni/net.d
+
+            - name: claude-node-config-volume
+              mountPath: /claude-node-config
+
+      volumes:
+        - name: cnibin
+          hostPath:
+            path: /opt/cni/bin
+        - name: cni-net-dir
+          hostPath:
+            path: /etc/cni/net.d
+
+        - name: claude-node-config-volume
+          configMap:
+            name: claude-config
+            defaultMode: 0744
+            items:
+              - key: "claude-node.yaml"
+                path: "claude-node.yaml"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: claude-config
+  namespace: kube-system
+data:
+  claude-node.yaml: |
+    basicUser: default
+    basicPass: default
+    ipamServerSvc: http://ipam-service.kube-system:8080  # change to ipam-service clusterip
+
+  claude-server.yaml: |
+    basicUser: default
+    basicPass: default 
+    adminPass: admin 
+    podCidr: 172.10.0.0/16 
+    autoAssignNodeIPBlock: true 
+    gateway: 0.0.0.0 
+    subnetSize: 24
+    etcdEndpoints: http://ipam-etcd.kube-system:2379  # you may deploy your own etcd :-)
