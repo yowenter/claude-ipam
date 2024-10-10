@@ -119,7 +119,7 @@ func cmdAdd(args *skel.CmdArgs, ipamEnv *types.IPAMEnvArgs, ipamConf *types.Ipam
 	}
 
 	logrus.Infof("require ip %v", ipreqData)
-	ipReq, err := http.NewRequest("POST", fmt.Sprintf("%s/api/ipam/ip/require", ipamConf.IpamServerSvc), bytes.NewBuffer(ipReqJson))
+	ipReq, err := http.NewRequest("POST", fmt.Sprintf("%s/api/ip/require", ipamConf.IpamServerSvc), bytes.NewBuffer(ipReqJson))
 	if err != nil {
 		logrus.Errorf("new require ip request failed %v", err)
 		return err
@@ -201,7 +201,7 @@ func cmdDel(args *skel.CmdArgs, ipamEnv *types.IPAMEnvArgs, ipamConf *types.Ipam
 		return err
 	}
 	logrus.Infof("release ip %v", ipreqData)
-	ipReq, err := http.NewRequest("POST", fmt.Sprintf("%s/api/ipam/ip/release", ipamConf.IpamServerSvc), bytes.NewBuffer(ipReqJson))
+	ipReq, err := http.NewRequest("POST", fmt.Sprintf("%s/api/ip/release", ipamConf.IpamServerSvc), bytes.NewBuffer(ipReqJson))
 	if err != nil {
 		logrus.Errorf("new release request failed %v", err)
 		return err
