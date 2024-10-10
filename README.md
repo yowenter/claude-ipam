@@ -27,8 +27,22 @@ Since we maintain the IP state machine, there will be no ip conflict bug.
 
 ### 3 Works good with Multus CNI
 
-Best pracetice is `Multus CNI + Macvlan|Bridge + Claude IPAM`
+Best practice is `Multus CNI + Macvlan|Bridge + Claude IPAM`
 
+```
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  annotations:
+    k8s.v1.cni.cncf.io/resourceName: mellanox.com/roce
+
+  name: roce-macvlan
+  namespace: default
+spec:
+  config: '{ "type": "macvlan", "cniVersion": "0.3.1", "name": "roce-macvlan",
+    "ipam": { "type": "claude", "range": "172.10.0.0/16" } }'
+
+```
 
 
 ## Build
