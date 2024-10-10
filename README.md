@@ -11,7 +11,7 @@ The whereabouts ipam has several bad design patterns:
 
 2 use daemonset instance for leader election, and iterate for the whole ip ranges to allocate just one ip. which may lead to ip conflict  in a high concurrent case.
 
-IP conflict is unacceptable! So I write my own!
+IP conflict is unacceptable, So I write my own!
 
 
 ## Features
@@ -20,14 +20,14 @@ IP conflict is unacceptable! So I write my own!
 You can manually setup network for each node or just specify a  `/16` pod cidr, it will slice subnet for each node.
 
 
-### 2 NO IP Conflict Bug
+### 2 No IP Conflict Issue
 
 Since we maintain the IP state machine, there will be no ip conflict bug.
 
 
 ### 3 Works good with Multus CNI
 
-Best practice is `Multus CNI + Macvlan|Bridge + Claude IPAM`
+Best practice `Multus CNI + Macvlan|Bridge + Claude IPAM`
 
 ```
 apiVersion: k8s.cni.cncf.io/v1
@@ -57,8 +57,8 @@ make docker-push
 ## Deploy
 
 ```
-# dependency: you should deploy your own etcd 
-# and modify the claude-config cm
+# dependency: you should deploy your own etcd.
+# modify the claude-config cm, speciy the etcdEndpoints.
 
 cd deploy/base
 kustomize build | kubectl apply -f -
