@@ -3,18 +3,18 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/yowenter/claude-ipam/pkg/ipam"
 )
 
-func pingIpamServer(ip string) (bool, error) {
+func pingIpamServer(svc string) (bool, error) {
 	client := http.Client{}
-	req, err := http.NewRequest("GET", fmt.Sprintf("http://%s:8080/ping", ip), &bytes.Buffer{})
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/ping", svc), &bytes.Buffer{})
 	if err != nil {
 		return false, err
 	}
@@ -24,7 +24,7 @@ func pingIpamServer(ip string) (bool, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return false, fmt.Errorf("ping ipam server ip %s failed ", ip)
+		return false, fmt.Errorf("ping ipam server  %s failed ", svc)
 	}
 	return true, nil
 }
@@ -38,33 +38,26 @@ func main() {
 		return
 	}
 
-	var ipamServerIp string
-	ips, _ := net.LookupIP("claude-ipam-svc.kube-system")
-	for _, ip := range ips {
-		if ipv4 := ip.To4(); ipv4 != nil {
-			logrus.Infof("check IPv4: %s", ipv4)
-			ok, err := pingIpamServer(ipv4.String())
-			if err != nil {
-				logrus.Errorf("ping ipam server %s failed %v", ipv4.String(), err)
-				continue
-			}
-			if ok {
-				ipamServerIp = ipv4.String()
-				break
-			}
-
-		}
-	}
-
-	if ipamServerIp == "" {
-		log.Errorf("no available ipam server ip")
+	ipam_svc := os.Getenv("CLAUDE_IPAM_SVC_PORT")
+	if ipam_svc == "" {
+		log.Errorf("CLAUDE_IPAM_SVC_PORT env not set")
 		os.Exit(1)
+		return
 	}
-	if ipamConf.IpamServerSvc != ipamServerIp {
-		log.Infof("ipam server ip changed %s -> %s", ipamConf.IpamServerSvc, ipamServerIp)
-		ipamConf.IpamServerSvc = ipamServerIp
+	ipam_svc = strings.Replace(ipam_svc, "tcp", "http", -1)
+
+	ok, err := pingIpamServer(ipam_svc)
+	if err != nil || !ok {
+		logrus.Errorf("ping ipam server %s failed %v", ipam_svc, err)
+		os.Exit(1)
+		return
+	}
+
+	if ipamConf.IpamServerSvc != ipam_svc {
+		log.Infof("ipam server ip changed %s -> %s", ipamConf.IpamServerSvc, ipam_svc)
+		ipamConf.IpamServerSvc = ipam_svc
 		if err := ipam.SaveIpamConfig(ipamConf, true); err != nil {
-			log.Errorf("sync ipam server ip failed %v", err)
+			log.Errorf("sync ipam server svc failed %v", err)
 			os.Exit(1)
 		}
 	}

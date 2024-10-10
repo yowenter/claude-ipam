@@ -216,7 +216,7 @@ data:
   claude-node.yaml: |
     basicUser: default
     basicPass: default
-    ipamServerSvc: http://ipam-service.kube-system:8080  # change to ipam-service clusterip
+    ipamServerSvc: http://ipam-service.kube-system:8080
 
   claude-server.yaml: |
     basicUser: default
