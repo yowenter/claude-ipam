@@ -42,6 +42,8 @@ cp -f /claude-node-config/claude-node.yaml $CLAUDE_IPAM_CONFIG
 # This prevents Kubernetes from restarting the pod repeatedly.
 should_sleep=${SLEEP:-"true"}
 echo "Done configuring CNI.  Sleep=$should_sleep"
+/claude/ipam-discovery || echo "ipam discovery failed, skipped."
 while [ "$should_sleep" == "true"  ]; do
-    sleep 1000000000000
+    /claude/ipam-discovery || echo "ipam discover failed, will retry!"
+    sleep 10
 done
