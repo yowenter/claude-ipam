@@ -31,6 +31,16 @@ rules:
       - get
       - list
 
+  - apiGroups: ["coordination.k8s.io"]
+    resources:
+      - leases
+      
+    verbs:
+      - get
+      - list
+      - create
+      - update
+
 ---
 apiVersion: v1
 kind: Service

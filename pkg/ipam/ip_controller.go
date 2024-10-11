@@ -557,7 +557,7 @@ func (ic *IpamController) gcIP(ctx context.Context, ip *types.IpInfo, action str
 	return err
 }
 
-func (ic *IpamController) SyncNodeNetworks(ctx context.Context) error {
+func (ic *IpamController) ReloadNodeNetworks(ctx context.Context) error {
 	n := &types.Node{}
 	nlist, err := ic.store.List(ctx, n.ParentKey(), "")
 	if err != nil || nlist == nil {
@@ -597,10 +597,11 @@ func (ic *IpamController) SyncNodeNetworks(ctx context.Context) error {
 }
 
 func (ic *IpamController) EnsureNodesNetwork() {
+	log.Infof("node ip block allocator started..")
 	ctx := context.Background()
 	for {
 
-		if err := ic.SyncNodeNetworks(ctx); err != nil {
+		if err := ic.ReloadNodeNetworks(ctx); err != nil {
 			log.Errorf("sync node network failed %v", err)
 			time.Sleep(time.Second * 10)
 			continue

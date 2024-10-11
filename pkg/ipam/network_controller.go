@@ -101,6 +101,9 @@ func incrementIP(ip net.IP) {
 func (ic *IpamController) SyncNetwork() error {
 	ctx := context.TODO()
 	ne := &types.NetworkInfo{}
+	if ic.ipBlockAllocator == nil {
+		return nil
+	}
 	networksKv, err := ic.store.List(ctx, ne.ParentKey(), "")
 	if err != nil {
 		log.Error("list network err. try again in 10 seconds ", err)
@@ -141,6 +144,9 @@ func (ic *IpamController) SyncNetwork() error {
 
 func (ic *IpamController) AssignNodeIpamBlocks() error {
 	// 自动将 pod cidr 地址 切分成小网段给 主机。
+	if ic.ipBlockAllocator == nil {
+		return nil
+	}
 	ctx := context.TODO()
 	nodesList, err := ic.k8sclient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {

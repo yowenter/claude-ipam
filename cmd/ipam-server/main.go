@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"net/http"
 	"strings"
@@ -11,7 +12,9 @@ import (
 	ginprometheus "github.com/zsais/go-gin-prometheus"
 
 	"github.com/yowenter/claude-ipam/pkg/ipam"
+	"github.com/yowenter/claude-ipam/pkg/leader"
 	"github.com/yowenter/claude-ipam/pkg/store/etcd"
+	"github.com/yowenter/claude-ipam/pkg/types"
 )
 
 var buildtime string
@@ -46,6 +49,7 @@ func main() {
 			"message": "ok",
 		})
 	})
+	ctx := context.TODO()
 
 	etcdConfig := &etcd.EtcdConfig{
 		EtcdEndpoints: ipamServerConf.EtcdEndpoints,
@@ -75,10 +79,32 @@ func main() {
 		r.POST("/api/admin/node", BasicAuth("admin", ipamServerConf.AdminPass), controller.CreateNodeHandler)
 	}
 
-	go controller.GCAllocatingExpiredIps()
-	go controller.MetrcisCollector()
+	go leader.RunWithLease(
+		ctx, &types.ElectionOption{
+			Name:          "cluade-ipam",
+			Namespace:     "kube-system",
+			LeaseDuration: time.Second * 60,
+		}, func(ctx context.Context) {
+			log.Info("leadership start..")
+			go controller.MetrcisCollector()
+			go controller.EnsureNodesNetwork()
+			go controller.GCAllocatingExpiredIps()
+		}, func() {
+			log.Info("leadership lost!")
+		})
 
-	go controller.EnsureNodesNetwork()
+	go func() {
+		ctx := context.Background()
+		for {
+			if err := controller.ReloadNodeNetworks(ctx); err != nil {
+				log.Errorf("sync node network failed %v", err)
+				time.Sleep(time.Second * 10)
+				continue
+			}
+			time.Sleep(time.Second * 30)
+		}
+
+	}()
 
 	s := &http.Server{
 		Addr:           ":8080",

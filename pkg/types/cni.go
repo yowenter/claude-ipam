@@ -1,6 +1,8 @@
 package types
 
 import (
+	"time"
+
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 )
 
@@ -17,6 +19,12 @@ type IpamConfiguration struct {
 	IpamServerSvc string `yaml:"ipamServerSvc"`
 	BasicUser     string `yaml:"basicUser"`
 	BasicPass     string `yaml:"basicPass"`
+}
+
+type ElectionOption struct {
+	Name          string        `yaml:"name,omitempty"`
+	Namespace     string        `yaml:"namespace,omitempty"`
+	LeaseDuration time.Duration `yaml:"lease_duration,omitempty"`
 }
 
 type IpamServerConfiguration struct {
