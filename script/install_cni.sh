@@ -33,8 +33,10 @@ function warn()
 # copy CLAUDE to the cni bin dir
 cp -f /claude/claude $CNI_BIN_DIR
 
-cp -f /claude-node-config/claude-node.yaml $CLAUDE_IPAM_CONFIG
-
+if [ ! -f $CLAUDE_IPAM_CONFIG ]; then
+    echo "claude node yaml on the host" $CLAUDE_IPAM_CONFIG
+    cp -f /claude-node-config/claude-node.yaml $CLAUDE_IPAM_CONFIG
+fi
 
 # ---------------------- end Generate a "kube-config".
 

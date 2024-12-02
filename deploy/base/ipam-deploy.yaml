@@ -79,7 +79,7 @@ metadata:
   name: claude-ipam-server
   namespace: kube-system
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: claude-ipam-server
@@ -226,14 +226,13 @@ data:
   claude-node.yaml: |
     basicUser: default
     basicPass: default
-    ipamServerSvc: http://ipam-service.kube-system:8080
 
   claude-server.yaml: |
     basicUser: default
     basicPass: default 
     adminPass: admin 
-    podCidr: 172.10.0.0/16 
+    podCidr: 172.20.0.0/16 
     autoAssignNodeIPBlock: true 
     gateway: 0.0.0.0 
     subnetSize: 24
-    etcdEndpoints: http://ipam-etcd.kube-system:2379  # you may deploy your own etcd :-)
+    etcdEndpoints: http://claude-etcd.kube-system.svc.cluster.local:2379
