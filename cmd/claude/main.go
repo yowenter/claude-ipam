@@ -56,8 +56,8 @@ func main() {
 				logrus.Errorf("load ipam config failed %v", err)
 				return err
 			}
-
-			return cmdAdd(args, ipamEnv, ipamConf, conf.CNIVersion)
+			logrus.Infof("cmdAdd net conf %++v, ipam env %v", conf, ipamEnv)
+			return cmdAdd(args, ipamEnv, ipamConf, conf.Master, conf.CNIVersion)
 		},
 		func(args *skel.CmdArgs) error {
 			return fmt.Errorf("CNI CHECK method is not implemented")
@@ -79,11 +79,12 @@ func main() {
 	)
 }
 
-func parseNetConf(bytes []byte) (*cnitypes.NetConf, error) {
-	conf := &cnitypes.NetConf{}
+func parseNetConf(bytes []byte) (*types.ClaudeNetConf, error) {
+	conf := &types.ClaudeNetConf{}
 	if err := json.Unmarshal(bytes, conf); err != nil {
 		return nil, fmt.Errorf("failed to parse network config: %v", err)
 	}
+	//TODO get masterif
 	return conf, nil
 }
 
@@ -95,7 +96,7 @@ func parseIPamEnv(envArgs string) (*types.IPAMEnvArgs, error) {
 	return &args, nil
 }
 
-func cmdAdd(args *skel.CmdArgs, ipamEnv *types.IPAMEnvArgs, ipamConf *types.IpamConfiguration, cniVersion string) error {
+func cmdAdd(args *skel.CmdArgs, ipamEnv *types.IPAMEnvArgs, ipamConf *types.IpamConfiguration, masterIf string, cniVersion string) error {
 	nodeName, err := os.Hostname()
 	if err != nil {
 		return err
@@ -110,6 +111,7 @@ func cmdAdd(args *skel.CmdArgs, ipamEnv *types.IPAMEnvArgs, ipamConf *types.Ipam
 		PodNamespace: string(ipamEnv.K8S_POD_NAMESPACE),
 		PolicyId:     "",
 		IfName:       args.IfName,
+		MasterIf:     masterIf,
 	}
 
 	ipReqJson, err := json.Marshal(ipreqData)
@@ -173,6 +175,7 @@ func cmdAdd(args *skel.CmdArgs, ipamEnv *types.IPAMEnvArgs, ipamConf *types.Ipam
 		},
 		Gateway: gw,
 	})
+
 	logrus.Infof("require ip result %v", result)
 
 	return cnitypes.PrintResult(result, cniVersion)

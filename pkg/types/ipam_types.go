@@ -14,6 +14,7 @@ type IPReq struct {
 	PolicyId     string `json:"policyId,omitempty"`
 	PodNamespace string `json:"podNamespace"`
 	IfName       string `json:"ifName"`
+	MasterIf     string `json:"masterIf"` // master net interface
 }
 
 type IPReserveReq struct {
@@ -75,11 +76,16 @@ type IPRangeReq struct {
 }
 
 type Node struct {
-	HostName string `json:"hostname"`
+	HostName  string  `json:"hostname"`
+	NetworkID string  `json:"networkId"`
+	Nets      []IfNet `json:"ifNets"` // 多网卡 多 net
+	UpdateAt  int64   `json:"update_at"`
+	Revision  string  `json:"-"`
+}
 
-	NetworkID string `json:"networkId"`
-	UpdateAt  int64  `json:"update_at"`
-	Revision  string `json:"-"`
+type IfNet struct {
+	IfName    string `json:"ifName"`
+	NetworkID string `json:"networkdId"`
 }
 
 type IPReservePolicy struct {
@@ -122,6 +128,7 @@ func (key *IPReservePolicy) Serialize() (*KVPair, error) {
 func (key *Node) Key() string {
 	k := strings.ToLower(fmt.Sprintf("/claude-ipam/v1/node/%s-%s", key.NetworkID, key.HostName))
 	return k
+
 }
 
 func (key *Node) ParentKey() string {
@@ -247,11 +254,11 @@ func (key *IpRecordInfo) Serialize() (*KVPair, error) {
 }
 
 type NetworkInfo struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	CIDR string `json:"cidr"`
+	ID   string `json:"id" yaml:"id"`
+	Name string `json:"name" yaml:"name"`
+	CIDR string `json:"cidr" yaml:"cidr"`
 
-	Idc      string `json:"idc"`
+	Idc      string `json:"idc" yaml:"idc"`
 	Revision string `json:"-"`
 	UpdateAt int64  `json:"update_at"`
 }

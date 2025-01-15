@@ -1,4 +1,4 @@
-package ipam
+package ipblock
 
 import (
 	"fmt"
@@ -58,6 +58,6 @@ func TestAllocateSubnetReload(t *testing.T) {
 		f, l := utils.GetFirstAndLastIP(*subn)
 		fmt.Println(subn.String(), size, f, l)
 	}
-	fmt.Println(ipblockAllocator.allocated, ipblockAllocator.hostAllocated)
+	fmt.Println(ipblockAllocator.allocatedNets, ipblockAllocator.hostAllocatedNets)
 
 }

@@ -21,7 +21,7 @@ func (ic *IpamController) CreateNetworkHandler(c *gin.Context) {
 	var nets []*types.NetworkInfo
 	for _, net := range req {
 		net.ID = strings.ReplaceAll(net.Idc+"-"+net.Name, "/", "-")
-		n, e := ic.CreateNetwork(ctx, net)
+		n, e := ic.dao.CreateNetwork(ctx, net)
 		if e != nil {
 			log.Error("create network err", net, e)
 			c.JSON(http.StatusBadRequest, gin.H{"error": e.Error()})
@@ -52,7 +52,7 @@ func (ic *IpamController) CreateIPRangeHandler(c *gin.Context) {
 			return
 		}
 
-		ips, e := ic.CreateIPRange(ctx, iprange)
+		ips, e := ic.dao.CreateIPRange(ctx, iprange)
 		if e != nil {
 			log.Error("create network err", iprange, e)
 			c.JSON(http.StatusBadRequest, gin.H{"error": e.Error()})
@@ -74,7 +74,7 @@ func (ic *IpamController) CreateNodeHandler(c *gin.Context) {
 	ctx := context.TODO()
 	var nodes []*types.Node
 	for _, node := range req {
-		n, e := ic.CreateNode(ctx, node)
+		n, e := ic.dao.CreateNode(ctx, node)
 		if e != nil {
 			log.Error("create node err", node, e)
 			c.JSON(http.StatusBadRequest, gin.H{"error": e.Error()})

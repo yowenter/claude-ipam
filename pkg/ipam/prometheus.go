@@ -30,15 +30,15 @@ func (ic *IpamController) MetrcisCollector() {
 	for {
 		time.Sleep(time.Second * 60)
 
-		networks := map[string]bool{}
-		for _, n := range ic.hostNetworkIds {
-			if _, ok := networks[n]; !ok {
-				networks[n] = true
-			}
-
+		networks, err := ic.dao.ListNetwork(ctx)
+		if err != nil {
+			log.Errorf("list network failed")
+			continue
 		}
+
 		var totalIPUsed float64
-		for netId := range networks {
+		for _, nnet := range networks {
+			netId := nnet.ID
 			ips, err := ic.listIPByNetworkID(ctx, netId, "")
 			if err != nil {
 				log.Error("listIPByNetworkID err", netId, err)
