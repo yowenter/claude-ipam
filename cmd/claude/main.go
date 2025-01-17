@@ -175,7 +175,12 @@ func cmdAdd(args *skel.CmdArgs, ipamEnv *types.IPAMEnvArgs, ipamConf *types.Ipam
 		},
 		Gateway: gw,
 	})
-
+	result.Routes = []*cnitypes.Route{
+		{
+			Dst: *ipNet,
+			GW:  gw,
+		},
+	}
 	logrus.Infof("require ip result %v", result)
 
 	return cnitypes.PrintResult(result, cniVersion)

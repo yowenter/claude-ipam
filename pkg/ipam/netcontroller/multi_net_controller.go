@@ -156,13 +156,13 @@ func NodeSlectorMatch(ns *types.NodeSelector, nodeName, masterIf string) (bool, 
 func (m *MultiNetController) Watch() {
 	for {
 		m.SyncNetworks()
-		time.Sleep(time.Second * 120)
+		time.Sleep(time.Second * 180)
 	}
 }
 
 func (m *MultiNetController) SyncNetworks() {
 	ctx := context.TODO()
-	log.Infof("multinet controller loading network configuration started... ")
+	log.Debug("multi net sync network started...")
 	for _, nnet := range m.multiNets {
 		if nnet.ID == "" {
 			log.Warnf("network %v id not specified, creating skipped", nnet)
@@ -179,7 +179,10 @@ func (m *MultiNetController) SyncNetworks() {
 				continue
 			}
 		} else {
-			log.Infof("network %v exists, creating using conf %v skipped.", netW, nnet)
+			if netW.CIDR != nnet.CIDR || netW.Name != nnet.Name {
+				log.Warningf("network `%v` exists, creating using `%v` skipped.", netW, nnet)
+			}
+
 			continue
 		}
 		if !needCreate {

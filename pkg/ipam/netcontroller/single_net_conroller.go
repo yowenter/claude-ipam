@@ -57,7 +57,7 @@ func (sc *SingleNetController) Watch() {
 			log.Errorf("assign node ipam blocks failed %v", err)
 			continue
 		}
-		time.Sleep(120 * time.Second)
+		time.Sleep(180 * time.Second)
 	}
 
 }
@@ -125,8 +125,7 @@ func (sc *SingleNetController) WaitForSyncNetwork() error {
 		}
 		sc.ipBlockAllocator.UpdateHostSubnet(node.HostName, ipNet)
 	}
-	log.Info("sync single network ok")
-
+	log.Debug("single network hosts synced")
 	return nil
 
 }

@@ -36,7 +36,8 @@ func main() {
 		gin.SetMode(gin.DebugMode)
 	}
 
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.LoggerWithWriter(gin.DefaultWriter, "/ping"), gin.Recovery())
 	p := ginprometheus.NewPrometheus("gin")
 	p.Use(r)
 

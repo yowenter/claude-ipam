@@ -60,6 +60,7 @@ func NewIpamController(cfg *types.IpamServerConfiguration, etcdcfg *etcd.EtcdCon
 		log.Infof("net mode not specified, using %v", NETMODE_SINGLE)
 		cfg.NetMode = NETMODE_SINGLE
 	}
+	log.Infof("net mode %v", cfg.NetMode)
 
 	return &IpamController{
 		store:               etcdClient,
@@ -250,10 +251,9 @@ func (ic *IpamController) findNodeNetwork(ctx context.Context, nodeName string, 
 		}
 
 	default:
-		log.Infof("netmode %v not specified, using both", ic.netMode)
 		nId, ok = ic.multiNetController.FindNodeNetwork(nodeName, masterIf)
 		if !ok {
-			log.Infof("multi net %s-%s not found, trying use single net mode", nodeName, masterIf)
+			log.Infof("multi net %s-%s not found, trying use single net", nodeName, masterIf)
 			nId, ok = ic.singleNetController.FindNodeNetwork(nodeName, masterIf)
 			if !ok {
 				return nil, errors.New("node network not found")
