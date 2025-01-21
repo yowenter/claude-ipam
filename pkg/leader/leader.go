@@ -3,7 +3,6 @@ package leader
 import (
 	"context"
 	"os"
-	"time"
 
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
@@ -56,15 +55,10 @@ func RunWithLease(ctx context.Context, electOps *types.ElectionOption, runner fu
 			Callbacks: leaderelection.LeaderCallbacks{
 				OnStartedLeading: runner,
 				OnStoppedLeading: func() {
-					log.Error("Leadership lost...")
 					if cancel != nil {
 						cancel()
 					}
-					// Retry acquiring leadership after a delay
-					go func() {
-						time.Sleep(5 * time.Second)
-						startLeaderElection()
-					}()
+					log.Fatalf("Leadership lost...")
 				},
 			},
 		})

@@ -1,7 +1,6 @@
 package ipam
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -12,23 +11,30 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/yowenter/claude-ipam/pkg/store"
 	"github.com/yowenter/claude-ipam/pkg/store/etcd"
 	"github.com/yowenter/claude-ipam/pkg/types"
 	"github.com/yowenter/claude-ipam/pkg/utils"
+
+	"github.com/yowenter/claude-ipam/pkg/ipam/dao"
+	"github.com/yowenter/claude-ipam/pkg/ipam/ipblock"
+	"github.com/yowenter/claude-ipam/pkg/ipam/netcontroller"
+)
+
+const (
+	NETMODE_SINGLE = "single"
+	NETMODE_MULTI  = "multi"
+	NETMODE_BOTH   = "both"
 )
 
 type IpamController struct {
 	store store.Store
+	dao   *dao.NetDao
 
-	ipBlockAllocator *IPBlockAllocator
-	gateway          string
-
-	k8sclient *kubernetes.Clientset
-
-	hostNetworkIds map[string]string
+	netMode             string
+	singleNetController netcontroller.NetController
+	multiNetController  netcontroller.NetController
 }
 
 func NewIpamController(cfg *types.IpamServerConfiguration, etcdcfg *etcd.EtcdConfig) (*IpamController, error) {
@@ -36,9 +42,9 @@ func NewIpamController(cfg *types.IpamServerConfiguration, etcdcfg *etcd.EtcdCon
 	if err != nil {
 		return nil, err
 	}
-	var ipblockAllocator *IPBlockAllocator
+	var ipblockAllocator *ipblock.IPBlockAllocator
 	if cfg.AutoAssignNodeIPBlock {
-		ipblockAllocator, err = NewIPBlockAllocator(cfg.PodCidr, cfg.SubnetSize, cfg.Gateway)
+		ipblockAllocator, err = ipblock.NewIPBlockAllocator(cfg.PodCidr, cfg.SubnetSize, cfg.Gateway)
 		if err != nil {
 			return nil, err
 		}
@@ -47,13 +53,21 @@ func NewIpamController(cfg *types.IpamServerConfiguration, etcdcfg *etcd.EtcdCon
 	if err != nil {
 		return nil, err
 	}
+	da := dao.NewDao(etcdClient)
+	snc := netcontroller.NewSingleNetController(da, etcdClient, k8sclient, ipblockAllocator)
+	mnc := netcontroller.NewMultiNetController(cfg.MultiNets, da, etcdClient)
+	if cfg.NetMode == "" {
+		log.Infof("net mode not specified, using %v", NETMODE_SINGLE)
+		cfg.NetMode = NETMODE_SINGLE
+	}
+	log.Infof("net mode %v", cfg.NetMode)
 
 	return &IpamController{
-		store:            etcdClient,
-		hostNetworkIds:   map[string]string{},
-		ipBlockAllocator: ipblockAllocator,
-		gateway:          cfg.Gateway,
-		k8sclient:        k8sclient,
+		store:               etcdClient,
+		singleNetController: snc,
+		multiNetController:  mnc,
+		netMode:             cfg.NetMode,
+		dao:                 da,
 	}, nil
 }
 
@@ -79,15 +93,15 @@ func (ic *IpamController) RequireIP(ctx context.Context, req *types.IPReq) (*typ
 		}, nil
 	}
 
-	network, err := ic.findNodeNetwork(ctx, req.Hostname)
+	network, err := ic.findNodeNetwork(ctx, req.Hostname, req.MasterIf)
 	if err != nil {
-		log.Error("findNetworkByHostname err", err)
+		log.Errorf("findNodeNetwork req %v err %v", req, err)
 		return nil, err
 	}
 
 	ipPool, err := ic.listIPByNetworkID(ctx, network.ID, types.STATUS_AVAILABLE)
 	if err != nil {
-		log.Error("listIPByNetworkID err", err)
+		log.Errorf("listIPByNetworkID %v err %v", network, err)
 		return nil, err
 	}
 	ip, err := ic.pickIp(ctx, network.ID, ipPool, req.PolicyId)
@@ -177,7 +191,7 @@ func (ic *IpamController) ReleaseIP(ctx context.Context, req *types.IPReq) (*typ
 }
 
 func (ic *IpamController) FindNodeNetworkCIDR(ctx context.Context, hostname string) ([]*types.NetworkCIDR, error) {
-	network, err := ic.findNodeNetwork(ctx, hostname)
+	network, err := ic.findNodeNetwork(ctx, hostname, "")
 	if err != nil {
 		log.Error("findNetworkByHostname err", hostname, err)
 		return nil, err
@@ -219,24 +233,43 @@ func (ic *IpamController) FindNodeNetworkCIDR(ctx context.Context, hostname stri
 	return networkCIDRs, nil
 }
 
-func (ic *IpamController) findNodeNetwork(ctx context.Context, nodeName string) (*types.NetworkInfo, error) {
-	nId, ok := ic.hostNetworkIds[nodeName]
-	if !ok {
-		return nil, errors.New("not found")
+// 根据 节点名称和 master 网卡，选择对应的网段。
+func (ic *IpamController) findNodeNetwork(ctx context.Context, nodeName string, masterIf string) (*types.NetworkInfo, error) {
+	var nId string
+	var ok bool
+	switch ic.netMode {
+	case NETMODE_SINGLE:
+		nId, ok = ic.singleNetController.FindNodeNetwork(nodeName, masterIf)
+		if !ok {
+			return nil, errors.New("node network not found")
+		}
+
+	case NETMODE_MULTI:
+		nId, ok = ic.multiNetController.FindNodeNetwork(nodeName, masterIf)
+		if !ok {
+			return nil, errors.New("node network not found")
+		}
+
+	default:
+		nId, ok = ic.multiNetController.FindNodeNetwork(nodeName, masterIf)
+		if !ok {
+			log.Infof("multi net %s-%s not found, trying use single net", nodeName, masterIf)
+			nId, ok = ic.singleNetController.FindNodeNetwork(nodeName, masterIf)
+			if !ok {
+				return nil, errors.New("node network not found")
+			}
+		}
+
 	}
+
 	if nId == "" {
 		return nil, errors.New("not found")
 	}
-	ne := &types.NetworkInfo{ID: nId}
-	data, err := ic.store.Get(ctx, ne.Key(), "")
-	if err != nil {
-		return nil, err
-	}
-	ne, err = types.DeSerializeNetworkInfo(data)
-	if err != nil {
-		return nil, err
-	}
 
+	ne, err := ic.dao.GetNetwork(ctx, nId)
+	if err != nil {
+		return nil, err
+	}
 	return ne, nil
 }
 
@@ -403,95 +436,6 @@ func (ic *IpamController) assignIp(ctx context.Context, ip *types.IpInfo, podNam
 
 }
 
-func (ic *IpamController) CreateNetwork(ctx context.Context, info *types.NetworkInfo) (*types.NetworkInfo, error) {
-	data, err := ic.store.Save(ctx, info)
-	if err != nil {
-		log.Error("Save network err", info, err)
-		return nil, err
-	}
-	return types.DeSerializeNetworkInfo(data)
-
-}
-
-func (ic *IpamController) CreateNode(ctx context.Context, node *types.Node) (*types.Node, error) {
-	ne := &types.NetworkInfo{
-		ID: node.NetworkID,
-	}
-	_, err := ic.store.Get(ctx, ne.Key(), "")
-	if err != nil {
-		log.Errorf("get network %s err %v", ne.Key(), err)
-		return nil, fmt.Errorf("find network err: %v", err)
-	}
-	data, err := ic.store.Save(ctx, node)
-	if err != nil {
-		log.Error("Save node err ", node, err)
-		return nil, err
-	}
-	return types.DeSerializeNodeInfo(data)
-}
-
-func (ic *IpamController) CreateIPRange(ctx context.Context, ipRange *types.IPRangeReq) ([]*types.IpInfo, error) {
-	log.Infof("creating ip range: %v", ipRange)
-	subNet, err := utils.CIDR2IPNet(ipRange.Subnet)
-	if err != nil {
-		return nil, err
-	}
-	start := net.ParseIP(ipRange.RangeStart)
-	end := net.ParseIP(ipRange.RangeEnd)
-	var ips []net.IP
-	if bytes.Compare(end, start) < 1 {
-		return nil, fmt.Errorf("ip end %v less than start %v", end, start)
-	}
-
-	s := start
-	cnt := 0
-	for {
-		if bytes.Compare(end, s) < 0 {
-			break
-		}
-		if subNet.Contains(s) {
-			ips = append(ips, s)
-			cnt += 1
-		} else {
-			break
-		}
-
-		s = utils.NextIP(s, 1)
-
-	}
-	if ipRange.Mask == "" {
-		ipRange.Mask = net.IP(subNet.Mask).To4().String()
-	}
-	log.Infof("creating iprange %v, cnt %v", ipRange, len(ips))
-	ipInfos := make([]*types.IpInfo, 0, len(ips))
-	for _, ip := range ips {
-		ipInfos = append(ipInfos, &types.IpInfo{
-			Ip:        ip.String(),
-			Mask:      ipRange.Mask,
-			Gateway:   ipRange.Gateway,
-			Status:    types.STATUS_AVAILABLE,
-			NetworkID: ipRange.NetworkID,
-		})
-	}
-
-	var succeedIps []*types.IpInfo
-	for _, ip := range ipInfos {
-		_, err := ic.store.Save(ctx, ip)
-		if err != nil {
-			log.Error("save ip error", ip)
-			continue
-		}
-		succeedIps = append(succeedIps, ip)
-
-	}
-	if len(succeedIps) < 1 {
-		return nil, errors.New("no ip create success")
-	}
-
-	return succeedIps, nil
-
-}
-
 func (ic *IpamController) GCAllocatingExpiredIps() {
 	ctx := context.Background()
 	log.Infof("IPGarbageCollect started.")
@@ -557,65 +501,11 @@ func (ic *IpamController) gcIP(ctx context.Context, ip *types.IpInfo, action str
 	return err
 }
 
-func (ic *IpamController) ReloadNodeNetworks(ctx context.Context) error {
-	n := &types.Node{}
-	nlist, err := ic.store.List(ctx, n.ParentKey(), "")
-	if err != nil || nlist == nil {
-		log.Error("node list err", err)
-		return err
-	}
+func (ic *IpamController) WatchNetwork() {
+	exit := make(chan string)
+	log.Infof("start watch network...")
+	go ic.singleNetController.Watch()
+	go ic.multiNetController.Watch()
+	<-exit
 
-	nodes := make([]*types.Node, 0, len(nlist.KVPairs))
-	for _, kv := range nlist.KVPairs {
-		node, err := types.DeSerializeNodeInfo(kv)
-		if err != nil {
-			log.Warning("DeSerializeNodeInfo node err", kv, err)
-			continue
-		}
-		nodes = append(nodes, node)
-	}
-	log.Debugf("nodes count %v", len(nodes))
-
-	hostNetworks := map[string]string{}
-
-	for _, n := range nodes {
-		if n.NetworkID == "" {
-			continue
-		}
-		if _, exist := hostNetworks[n.HostName]; !exist {
-			hostNetworks[n.HostName] = n.NetworkID
-		}
-	}
-
-	if len(ic.hostNetworkIds) != len(hostNetworks) {
-		log.Infof("hostNetwork changed %v -> %v ", ic.hostNetworkIds, hostNetworks)
-
-	}
-	ic.hostNetworkIds = hostNetworks
-	return nil
-
-}
-
-func (ic *IpamController) EnsureNodesNetwork() {
-	log.Infof("node ip block allocator started..")
-	ctx := context.Background()
-	for {
-
-		if err := ic.ReloadNodeNetworks(ctx); err != nil {
-			log.Errorf("sync node network failed %v", err)
-			time.Sleep(time.Second * 10)
-			continue
-		}
-		if err := ic.SyncNetwork(); err != nil {
-			log.Errorf("sync node network failed %v", err)
-			time.Sleep(time.Second * 10)
-			continue
-		}
-		if err := ic.AssignNodeIpamBlocks(); err != nil {
-			log.Errorf("assign node ipam blocks failed %v", err)
-			time.Sleep(time.Second * 10)
-			continue
-		}
-		time.Sleep(time.Second * 60)
-	}
 }

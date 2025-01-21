@@ -54,7 +54,13 @@ func main() {
 	}
 
 	if ipamConf.IpamServerSvc != ipam_svc {
+		if ipamConf.StaticSvc && ipamConf.IpamServerSvc != "" {
+			log.Infof("ipam server ip use static %v", ipamConf.IpamServerSvc)
+			os.Exit(0)
+		}
+
 		log.Infof("ipam server ip changed %s -> %s", ipamConf.IpamServerSvc, ipam_svc)
+
 		ipamConf.IpamServerSvc = ipam_svc
 		if err := ipam.SaveIpamConfig(ipamConf, true); err != nil {
 			log.Errorf("sync ipam server svc failed %v", err)

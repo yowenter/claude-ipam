@@ -28,13 +28,18 @@ func main() {
 		panic(err)
 	}
 
-	r := gin.Default()
+	if ipamServerConf.Debug {
+		log.SetLevel(log.DebugLevel)
+		gin.SetMode(gin.ReleaseMode)
+	} else {
+		log.SetLevel(log.InfoLevel)
+		gin.SetMode(gin.DebugMode)
+	}
+
+	r := gin.New()
+	r.Use(gin.LoggerWithWriter(gin.DefaultWriter, "/ping"), gin.Recovery())
 	p := ginprometheus.NewPrometheus("gin")
 	p.Use(r)
-
-	if gin.Mode() == gin.DebugMode {
-		log.SetLevel(log.DebugLevel)
-	}
 
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{
@@ -81,30 +86,20 @@ func main() {
 
 	go leader.RunWithLease(
 		ctx, &types.ElectionOption{
-			Name:          "cluade-ipam",
+			Name:          "cluade-ipam-le",
 			Namespace:     "kube-system",
 			LeaseDuration: time.Second * 60,
 		}, func(ctx context.Context) {
+			// TODO net controller
+
 			log.Info("leadership start..")
 			go controller.MetrcisCollector()
-			go controller.EnsureNodesNetwork()
 			go controller.GCAllocatingExpiredIps()
+			controller.WatchNetwork()
+
 		}, func() {
 			log.Info("leadership lost!")
 		})
-
-	go func() {
-		ctx := context.Background()
-		for {
-			if err := controller.ReloadNodeNetworks(ctx); err != nil {
-				log.Errorf("sync node network failed %v", err)
-				time.Sleep(time.Second * 10)
-				continue
-			}
-			time.Sleep(time.Second * 30)
-		}
-
-	}()
 
 	s := &http.Server{
 		Addr:           ":8080",

@@ -63,5 +63,5 @@ func TestCIDRConvert(t *testing.T) {
 		panic(err)
 	}
 	assert.Equal(t, newIpnet.String(), "172.10.4.65/24")
-
+	assert.Equal(t, net.IP(newIpnet.Mask).To4().String(), "255.255.255.0")
 }
