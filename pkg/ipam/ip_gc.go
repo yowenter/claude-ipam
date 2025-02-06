@@ -26,6 +26,10 @@ func (ic *IpamController) GcIpTask(ctx context.Context) error {
 			log.Errorf("list node %v ip records failed %v", n.Name, err)
 			continue
 		}
+		if len(records) < 1 {
+			continue
+		}
+		log.Debugf("check node %v ip records %v", n.Name, len(records))
 
 		for _, rc := range records {
 			// ip record 创建于 7 天内，不处理
