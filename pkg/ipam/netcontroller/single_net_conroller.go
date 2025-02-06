@@ -53,8 +53,8 @@ func (sc *SingleNetController) Watch() {
 			continue
 		}
 		if err := sc.AssignNodeIpamBlocks(); err != nil {
-			time.Sleep(time.Second * 10)
 			log.Errorf("assign node ipam blocks failed %v", err)
+			time.Sleep(time.Second * 10)
 			continue
 		}
 		time.Sleep(180 * time.Second)
@@ -147,7 +147,7 @@ func (sc *SingleNetController) AssignNodeIpamBlocks() error {
 		}
 		nodeNet, err := sc.ipBlockAllocator.Allocate(node.Name)
 		if err != nil {
-			return err
+			return fmt.Errorf("allocate net for node %v err %v", node.Name, err)
 		}
 		ipamblock, err := sc.dao.CreateNetwork(ctx, &types.NetworkInfo{
 			ID:   uuid.NewString(),
