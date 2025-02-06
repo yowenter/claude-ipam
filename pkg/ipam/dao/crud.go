@@ -165,3 +165,38 @@ func (d *NetDao) CreateIPRange(ctx context.Context, ipRange *types.IPRangeReq) (
 	return succeedIps, nil
 
 }
+
+func (d *NetDao) ListIpRecords(ctx context.Context, prefix string) ([]*types.IpRecordInfo, error) {
+	ir := &types.IpRecordInfo{}
+	ipRecordsKv, err := d.store.List(ctx, ir.ParentKey()+prefix, "")
+	if err != nil {
+		log.Errorf("list network err %v", err)
+		return nil, err
+	}
+	records := make([]*types.IpRecordInfo, 0, len(ipRecordsKv.KVPairs))
+
+	for _, nkv := range ipRecordsKv.KVPairs {
+		ir, err = types.DeSerializeIpRecord(nkv)
+		if err != nil {
+			log.Error("DeSerializeIpRecord err", nkv, err)
+			continue
+		}
+		records = append(records, ir)
+
+	}
+	return records, nil
+}
+
+func (d *NetDao) GetIp(ctx context.Context, ip *types.IpInfo) (*types.IpInfo, error) {
+	ipInfoKV, err := d.store.Get(ctx, ip.Key(), "")
+	if err != nil {
+		log.Errorf("fetch ip %v err %v ", ip, err)
+		return nil, err
+	}
+	ipInfo, err := types.DeSerializeIpInfo(ipInfoKV)
+	if err != nil {
+		log.Errorf("deserialize ip %v err %v ", ipInfoKV, err)
+		return nil, err
+	}
+	return ipInfo, nil
+}

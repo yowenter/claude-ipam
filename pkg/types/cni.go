@@ -29,10 +29,11 @@ type ElectionOption struct {
 }
 
 type IpamServerConfiguration struct {
-	BasicUser string `yaml:"basicUser"`
-	BasicPass string `yaml:"basicPass"`
-	AdminPass string `yaml:"adminPass"`
-	Debug     bool   `json:"debug"`
+	BasicUser  string `yaml:"basicUser"`
+	BasicPass  string `yaml:"basicPass"`
+	AdminPass  string `yaml:"adminPass"`
+	Debug      bool   `json:"debug"`
+	EnableGcIP bool   `json:"enable_gc_ip"`
 
 	PodCidr               string `yaml:"podCidr"`
 	AutoAssignNodeIPBlock bool   `yaml:"autoAssignNodeIPBlock"`

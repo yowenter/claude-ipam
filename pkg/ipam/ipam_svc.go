@@ -11,6 +11,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/yowenter/claude-ipam/pkg/store"
 	"github.com/yowenter/claude-ipam/pkg/store/etcd"
@@ -35,6 +36,8 @@ type IpamController struct {
 	netMode             string
 	singleNetController netcontroller.NetController
 	multiNetController  netcontroller.NetController
+	enableGcIP          bool
+	k8s                 *kubernetes.Clientset
 }
 
 func NewIpamController(cfg *types.IpamServerConfiguration, etcdcfg *etcd.EtcdConfig) (*IpamController, error) {
@@ -68,6 +71,8 @@ func NewIpamController(cfg *types.IpamServerConfiguration, etcdcfg *etcd.EtcdCon
 		multiNetController:  mnc,
 		netMode:             cfg.NetMode,
 		dao:                 da,
+		enableGcIP:          cfg.EnableGcIP,
+		k8s:                 k8sclient,
 	}, nil
 }
 

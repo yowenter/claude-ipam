@@ -95,6 +95,7 @@ func main() {
 			log.Info("leadership start..")
 			go controller.MetrcisCollector()
 			go controller.GCAllocatingExpiredIps()
+			go controller.LoopGcIPs()
 			controller.WatchNetwork()
 
 		}, func() {
