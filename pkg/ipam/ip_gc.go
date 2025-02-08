@@ -46,6 +46,12 @@ func (ic *IpamController) GcIpTask(ctx context.Context) error {
 			}
 			_, err = ic.k8s.CoreV1().Pods(rc.PodNamespace).Get(ctx, rc.PodName, metav1.GetOptions{})
 			if err != nil && errors.IsNotFound(err) {
+				// 先删记录，再更新 IP 状态
+				_, err = ic.store.Delete(ctx, rc.Key(), rc.Revision)
+				if err != nil {
+					log.Errorf("ip record %v delete failure ", rc)
+					continue
+				}
 				if err := ic.gcIP(ctx, ip, types.ACTION_GC); err != nil {
 					log.Errorf("gc ip %v, record %v, failed %v", ip, rc, err)
 				} else {
